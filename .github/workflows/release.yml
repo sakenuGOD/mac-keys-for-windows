@@ -15,32 +15,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install AutoHotkey v2
+      - name: Install AutoHotkey v2 + Ahk2Exe
         shell: pwsh
-        run: |
-          $headers = @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
-          if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
-          $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest'
-          $asset = $release.assets | Where-Object { $_.name -like 'AutoHotkey_*.zip' } | Select-Object -First 1
-          if (-not $asset) { throw 'AutoHotkey zip asset not found in latest release' }
-          Write-Host "Downloading $($asset.name) ..."
-          $zip = "$env:RUNNER_TEMP\ahk.zip"
-          $dest = "$env:RUNNER_TEMP\ahk"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
-          Expand-Archive -Path $zip -DestinationPath $dest -Force
-          Get-ChildItem $dest -Recurse -Filter 'Ahk2Exe.exe' | ForEach-Object { Write-Host "Found: $($_.FullName)" }
-          "AHK_DIR=$dest" | Out-File -Append -FilePath $env:GITHUB_ENV
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          function Get-LatestZip($repo, $pattern) {
+            $headers = @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
+            if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+            $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$repo/releases/latest"
+            $asset = $release.assets | Where-Object { $_.name -like $pattern } | Select-Object -First 1
+            if (-not $asset) { throw "No asset matching $pattern in $repo" }
+            return $asset.browser_download_url
+          }
+
+          $ahkDir = "$env:RUNNER_TEMP\ahk"
+          New-Item -ItemType Directory -Force -Path $ahkDir | Out-Null
+          $ahkZip = "$env:RUNNER_TEMP\ahk.zip"
+          Invoke-WebRequest -Uri (Get-LatestZip 'AutoHotkey/AutoHotkey' 'AutoHotkey_*.zip') -OutFile $ahkZip -Headers @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
+          Expand-Archive -Path $ahkZip -DestinationPath $ahkDir -Force
+
+          $a2eDir = Join-Path $ahkDir 'Compiler'
+          New-Item -ItemType Directory -Force -Path $a2eDir | Out-Null
+          $a2eZip = "$env:RUNNER_TEMP\ahk2exe.zip"
+          Invoke-WebRequest -Uri (Get-LatestZip 'AutoHotkey/Ahk2Exe' 'Ahk2Exe*.zip') -OutFile $a2eZip -Headers @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
+          Expand-Archive -Path $a2eZip -DestinationPath $a2eDir -Force
+
+          Write-Host 'AHK dir contents:'
+          Get-ChildItem $ahkDir | Format-Table Name, Length
+          Write-Host 'Compiler dir contents:'
+          Get-ChildItem $a2eDir | Format-Table Name, Length
+
+          "AHK_DIR=$ahkDir" | Out-File -Append -FilePath $env:GITHUB_ENV
 
       - name: Compile mac-keys.exe
         shell: pwsh
         run: |
-          $ahk2exe = Join-Path $env:AHK_DIR 'Compiler\Ahk2Exe.exe'
-          $base    = Join-Path $env:AHK_DIR 'AutoHotkey64.exe'
-          if (-not (Test-Path $ahk2exe)) { throw "Ahk2Exe not found at $ahk2exe" }
-          & $ahk2exe /in "mac-keys.ahk" /out "mac-keys.exe" /base "$base"
+          $ahk2exe = Get-ChildItem -Path (Join-Path $env:AHK_DIR 'Compiler') -Filter 'Ahk2Exe.exe' -Recurse | Select-Object -First 1
+          if (-not $ahk2exe) { throw 'Ahk2Exe.exe not found under Compiler/' }
+          $base = Join-Path $env:AHK_DIR 'AutoHotkey64.exe'
+          if (-not (Test-Path $base)) { throw "Base exe not found: $base" }
+          Write-Host "Using $($ahk2exe.FullName) + $base"
+          & $ahk2exe.FullName /in "mac-keys.ahk" /out "mac-keys.exe" /base "$base"
           if (-not (Test-Path 'mac-keys.exe')) { throw 'Build failed' }
+          Write-Host "Built mac-keys.exe ($((Get-Item 'mac-keys.exe').Length) bytes)"
 
       - name: Package release zip
         shell: pwsh

@@ -18,12 +18,20 @@ jobs:
       - name: Install AutoHotkey v2
         shell: pwsh
         run: |
-          $url = 'https://www.autohotkey.com/download/ahk-v2.zip'
+          $headers = @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
+          if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+          $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest'
+          $asset = $release.assets | Where-Object { $_.name -like 'AutoHotkey_*.zip' } | Select-Object -First 1
+          if (-not $asset) { throw 'AutoHotkey zip asset not found in latest release' }
+          Write-Host "Downloading $($asset.name) ..."
           $zip = "$env:RUNNER_TEMP\ahk.zip"
           $dest = "$env:RUNNER_TEMP\ahk"
-          Invoke-WebRequest -Uri $url -OutFile $zip
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -Headers @{ 'User-Agent' = 'mac-keys-for-windows-ci' }
           Expand-Archive -Path $zip -DestinationPath $dest -Force
+          Get-ChildItem $dest -Recurse -Filter 'Ahk2Exe.exe' | ForEach-Object { Write-Host "Found: $($_.FullName)" }
           "AHK_DIR=$dest" | Out-File -Append -FilePath $env:GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile mac-keys.exe
         shell: pwsh

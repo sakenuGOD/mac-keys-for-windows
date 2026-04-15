@@ -1,0 +1,65 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AutoHotkey v2
+        shell: pwsh
+        run: |
+          $url = 'https://www.autohotkey.com/download/ahk-v2.zip'
+          $zip = "$env:RUNNER_TEMP\ahk.zip"
+          $dest = "$env:RUNNER_TEMP\ahk"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          "AHK_DIR=$dest" | Out-File -Append -FilePath $env:GITHUB_ENV
+
+      - name: Compile mac-keys.exe
+        shell: pwsh
+        run: |
+          $ahk2exe = Join-Path $env:AHK_DIR 'Compiler\Ahk2Exe.exe'
+          $base    = Join-Path $env:AHK_DIR 'AutoHotkey64.exe'
+          if (-not (Test-Path $ahk2exe)) { throw "Ahk2Exe not found at $ahk2exe" }
+          & $ahk2exe /in "mac-keys.ahk" /out "mac-keys.exe" /base "$base"
+          if (-not (Test-Path 'mac-keys.exe')) { throw 'Build failed' }
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          $stage = 'release-staging'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item 'mac-keys.exe'          $stage
+          Copy-Item 'config.default.json'   $stage
+          Copy-Item 'install.ps1'           $stage
+          Copy-Item 'uninstall.ps1'         $stage
+          Copy-Item 'README.md'             $stage
+          Copy-Item 'LICENSE'               $stage
+          Compress-Archive -Path "$stage\*" -DestinationPath 'mac-keys-for-windows.zip' -Force
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mac-keys-for-windows.zip
+            mac-keys.exe
+          generate_release_notes: true
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-keys-for-windows
+          path: |
+            mac-keys.exe
+            mac-keys-for-windows.zip

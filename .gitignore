@@ -1,0 +1,21 @@
+# Build artifacts
+mac-keys.exe
+*.zip
+release-staging/
+
+# AHK intermediates
+*.bin
+*.rc
+
+# User-local config (живёт в %APPDATA%, но на всякий случай)
+config.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp

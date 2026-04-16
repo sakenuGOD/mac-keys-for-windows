@@ -2,6 +2,16 @@
   "enabled": true,
   "autoPauseFullscreen": true,
 
+  "_comment_smartGating": "Универсальное определение игр без хардкода имён. Если Alt удерживается долго (game-key) — пропускаем нативный Alt в игру. Если коротко — отрабатываем как Mac-шорткат. Серая зона — решается по движению WASD во время удержания Alt.",
+  "smartGating": {
+    "enabled": true,
+    "altShortcutMaxMs": 250,
+    "altGameMinMs": 800
+  },
+
+  "_comment_quitHotkey": "Глобальный kill-switch. Полностью завершает утилиту (хоткеи перестают работать).",
+  "quitHotkey": "^!+q",
+
   "_comment_excludedApps": "Процессы, в которых утилита НЕ работает (RDP, VM, удалённый доступ). Сюда же можно добавить свои игры из лаунчеров, которые по какой-то причине не детектятся как fullscreen. Редактировать из трея: 'Disable in current app'.",
   "excludedApps": [
     "mstsc.exe",

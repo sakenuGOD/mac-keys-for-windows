@@ -72,6 +72,9 @@ jobs:
           Copy-Item 'uninstall.ps1'         $stage
           Copy-Item 'README.md'             $stage
           Copy-Item 'LICENSE'               $stage
+          if (Test-Path 'assets') {
+              Copy-Item 'assets' -Destination $stage -Recurse
+          }
           Compress-Archive -Path "$stage\*" -DestinationPath 'mac-keys-for-windows.zip' -Force
 
       - name: Upload release asset

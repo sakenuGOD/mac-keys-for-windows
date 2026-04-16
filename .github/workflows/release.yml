@@ -56,8 +56,9 @@ jobs:
           $base = Join-Path $env:AHK_DIR 'AutoHotkey64.exe'
           if (-not (Test-Path $base)) { throw "Base exe not found: $base" }
           Write-Host "Using $($ahk2exe.FullName) + $base"
-          & $ahk2exe.FullName /in "mac-keys.ahk" /out "mac-keys.exe" /base "$base"
-          if (-not (Test-Path 'mac-keys.exe')) { throw 'Build failed' }
+          $proc = Start-Process -FilePath $ahk2exe.FullName -ArgumentList @('/in','mac-keys.ahk','/out','mac-keys.exe','/base',$base) -Wait -NoNewWindow -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Ahk2Exe exited with $($proc.ExitCode)" }
+          if (-not (Test-Path 'mac-keys.exe')) { throw 'Build failed: output file missing after Ahk2Exe completed' }
           Write-Host "Built mac-keys.exe ($((Get-Item 'mac-keys.exe').Length) bytes)"
 
       - name: Package release zip
